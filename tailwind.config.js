@@ -1,4 +1,7 @@
 /** @type {import('tailwindcss').Config} */
+
+const plugin = require("tailwindcss/plugin");
+
 export default {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
@@ -27,8 +30,14 @@ export default {
         socialicon: "#D1D8E0",
       },
       fontFamily: {
-        inter: ['Orbitron', 'sans-serif'],
-        roboto:["Roboto Flex", "sans-serif"]
+        inter: ["Orbitron", "sans-serif"],
+        roboto: ["Roboto Flex", "sans-serif"],
+        helvetica: ["Helvetica", "sans-serif"],
+        holtwood: ["Holtwood One SC", "sans-serif"],
+        shareTech: ["Share Tech", "Holtwood One SC"],
+        poppins: ["Poppins", "Holtwood One SC"],
+        axiforma: ["Axiforma", "sans-serif"],
+        impact: ["Ultra"],
       },
       fontSize: {
         metatitle: ["12px", "20px"],
@@ -98,13 +107,18 @@ export default {
         "c-1154": "72.125rem",
         "c-1016": "63.5rem",
       },
+      textShadow: {
+        sm: "0 1px 2px var(--tw-shadow-color)",
+        DEFAULT: "3px 3px 20px var(--tw-shadow-color)",
+        lg: "0 8px 16px var(--tw-shadow-color)",
+      },
       zIndex: {
         99999: "99999",
         999: "999",
         1: "1",
       },
       backgroundImage: {
-        'hero': "linear-gradient(to right, rgba(0, 15, 22, 0.9), rgba(33, 58, 74, 0.9))",
+        hero: "linear-gradient(to right, rgba(0, 15, 22, 0.9), rgba(33, 58, 74, 0.9))",
       },
       opacity: {
         65: ".65",
@@ -132,16 +146,26 @@ export default {
         },
       },
       animation: {
-        'infinite-scroll': 'infinite-scroll 15s linear infinite forwards',
+        "infinite-scroll": "infinite-scroll 15s linear infinite forwards",
       },
       keyframes: {
-        'infinite-scroll': {
-          from: { transform: 'translateX(0%)' },
-          to: { transform: 'translateX(-100%)' },
-        }
+        "infinite-scroll": {
+          from: { transform: "translateX(0%)" },
+          to: { transform: "translateX(-100%)" },
+        },
       },
     },
   },
-  plugins: [],
-}
-
+  plugins: [
+    plugin(function ({ matchUtilities, theme }) {
+      matchUtilities(
+        {
+          "text-shadow": (value) => ({
+            textShadow: value,
+          }),
+        },
+        { values: theme("textShadow") }
+      );
+    }),
+  ],
+};

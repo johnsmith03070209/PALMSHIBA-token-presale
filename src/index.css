@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 /* third-party libraries CSS */
+* {
+  box-sizing: border-box !important;
+}
+
+html,
+body {
+  padding: 0px;
+  margin: 0px;
+  overflow-x: hidden;
+  background-color: #04011c;
+}
 
 h1,
 h2,
@@ -96,4 +107,64 @@ nav li {
 }
 .Toastify__toast-container {
   width: 320px !important;
+}
+
+#outlined-text {
+  color: #04011c;
+  -webkit-text-stroke: 1px #e1701e;
+}
+
+#backgroundMask_1 {
+  background-image: conic-gradient(
+    #8dff1b 0%,
+    #297fff 0%,
+    #3870ff 27%,
+    #0f7bfb 52%,
+    #00c2ff 72%,
+    #e1a1ff 100%
+  );
+  rotate: -45deg;
+  filter: blur(200px);
+}
+
+#backgroundMask_2 {
+  background-image: conic-gradient(
+    #8dff1b 0%,
+    #297fff 0%,
+    #3870ff 27%,
+    #0f7bfb 52%,
+    #00c2ff 72%,
+    #e1a1ff 100%
+  );
+  rotate: 180deg;
+  filter: blur(370px);
+}
+
+#backgroundMask_3 {
+  background-image: conic-gradient(
+    #8dff1b 0%,
+    #297fff 0%,
+    #3870ff 27%,
+    #0f7bfb 52%,
+    #00c2ff 72%,
+    #e1a1ff 100%
+  );
+  rotate: 145deg;
+  filter: blur(5000px);
+}
+
+.folder {
+  border-radius: 0px 20px 37px 37px;
+  padding-top: 0px;
+}
+
+.folder:before {
+  content: "";
+  width: calc(100% - 125px);
+  height: 3.8em;
+  border-radius: 20px 20px 0 0;
+  background-color: #0d0b33;
+  position: absolute;
+  top: -3.7em;
+  left: 0px;
 }

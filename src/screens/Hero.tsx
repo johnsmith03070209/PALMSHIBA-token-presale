@@ -1,325 +1,734 @@
-import React, { useState, useEffect } from "react";
-import Web3 from "web3";
-import MyTokenContractABI from "../MyToken.json";
+import { useEffect, useState } from "react";
 
-import Image from "../components/Image";
 import Grid from "../components/Grid";
-import Block from "../components/Block";
-import Eth from "../assets/eth.png";
-import Chart from "../assets/charts.png";
-import BgWeb from "../assets/bg-web.png";
+import ShibaBlock from "../components/ShibaBlock";
+import TimeAtomicBlock from "../components/TimeAtomicBlock";
 
 import { toast } from "react-toastify";
 import Notification from "../components/Notification";
 
 import { ToastContainer } from "react-toastify";
+import {
+  useAccount,
+  useBalance,
+  useWriteContract,
+  useReadContract,
+} from "wagmi";
+import { useWeb3Modal } from "@web3modal/wagmi/react";
+import Web3 from "web3";
+import { ethers } from "ethers";
+import { parseEther as viemParseEther } from "viem";
 
-const contractAddress = "0xb91fFF5ec726f719dbD68d2EDf588958dfbA81De";
-const abi = MyTokenContractABI;
+///////////////      RPC URLs     ///////////////
+const ETHEREUM_RPC_URL = "wss://ethereum-rpc.publicnode.com";
+const BINANCE_RPC_URL = "https://bsc-rpc.publicnode.com";
+
+/////////////// Token contract constants   ///////////////////////
+import ETHEREUM_PRESALE_CONTRACT_ABI from "../utils/ethereumABI.json";
+import BINANCE_PRESALE_CONTRACT_ABI from "../utils/binanceABI.json";
+import ETHEREUM_USDT_CONTRACT_ABI from "../utils/erc20.json";
+import BINANCE_USDT_CONTRACT_ABI from "../utils/bep20.json";
+import ShibaBlock_top from "../components/ShibaBlock_top";
+
+// const BINANCE_TOKEN_CONTRACT_ADDRESS = "0xF6a43c94C28cb98f06D86F174b3A7d337c4A3436"; //Test
+const ETHEREUM_PRESALE_CONTRACT_ADDRESS =
+  "0x10aa951fB435e21A85Ca2e3CF6819DaB4887c19A";
+const BINANCE_PRESALE_CONTRACT_ADDRESS =
+  "0x502D334EE743888B1680030A19C22b2934A24087"; //REAL
+
+//USDT token address
+const USDT_ADDRESS_ON_ETHEREUM = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const USDT_ADDRESS_ON_BINANCE = "0x55d398326f99059fF775485246999027B3197955";
+
+//Pshiba token address
+// const PSHIBA_ADDRESS_ON_ETHEREUM = "0x5DFADeacc8239edBDa5598AEEd615d18F6825dE9";
+// const PSHIBA_ADDRESS_ON_BSC = "0x5DFADeacc8239edBDa5598AEEd615d18F6825dE9";
 
 const Hero = () => {
-  const [web3, setWeb3] = useState<any>(null);
-  const [account, setAccount] = useState<string>("");
-  const [balance, setBalance] = useState<number>(0);
+  /////////////// State & variables       ////////////////////////////
+  const [isBuyWithOpened, setIsBuyWithOpened] = useState<boolean>(false);
+  const [selectedBuyMethod, setSelectedBuyMethod] = useState<string>("USDT");
   const [buyAmount, setBuyAmount] = useState<string>("");
-  const [gasFee, setGasFee] = useState<string>("21000");
-  // const [sellAmount, setSellAmount] = useState<string>("");
-  // const [ethRequired, setEthRequired] = useState<number>(0);
-  const [tokensReceived, setTokenReceived] = useState<number>(0);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [receiveAmount, setReceiveAmount] = useState<Number>(0.0);
+  const [connectedNetworkName, setConnectedNetworkName] =
+    useState<string>("None");
 
-  const calcBalance = async () => {
-    const tempContract = new web3.eth.Contract(abi, contractAddress);
-    const tempBalance = await tempContract.methods.balance().call();
-    setBalance(parseFloat(tempBalance));
+  const [web3, setWeb3] = useState<Web3 | null>(null);
+  const [daysRemained, setDaysRemained] = useState<Number>(0);
+  const [hoursRemained, setHoursRemained] = useState<Number>(0);
+  const [minutesRemained, setMinutesRemained] = useState<Number>(0);
+  const [secondsRemained, setSecondRemained] = useState<Number>(0);
+
+  const [ethPrice, setEthPrice] = useState<Number>();
+  const [bnbPrice, setBnbPrice] = useState<Number>();
+  const [timeRemained, setTimeRemained] = useState<Number | undefined>();
+
+  const { open } = useWeb3Modal();
+  const { address, isConnected, chainId } = useAccount();
+  const balance = useBalance({
+    address: address,
+  });
+  const usdtBalance = useBalance({
+    address: address,
+    token:
+      connectedNetworkName === "ETHEREUM"
+        ? USDT_ADDRESS_ON_ETHEREUM
+        : USDT_ADDRESS_ON_BINANCE,
+    chainId,
+  });
+
+  const { writeContractAsync } = useWriteContract();
+
+  const { data: shibaPrice } = useReadContract({
+    abi:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ABI
+        : BINANCE_PRESALE_CONTRACT_ABI,
+    address:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ADDRESS
+        : BINANCE_PRESALE_CONTRACT_ADDRESS,
+    functionName: "getCurrentTokenPrice",
+    chainId: chainId === undefined ? 56 : chainId,
+  });
+  console.log("contract shiba price value", shibaPrice);
+
+  const { data: claimAmount } = useReadContract({
+    abi:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ABI
+        : BINANCE_PRESALE_CONTRACT_ABI,
+    address:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ADDRESS
+        : BINANCE_PRESALE_CONTRACT_ADDRESS,
+    functionName: "getBalance",
+    account: address,
+    chainId: chainId === undefined ? 56 : chainId,
+  });
+  console.log("Buy Amount", shibaPrice);
+
+  const { data: _timeRemained } = useReadContract({
+    abi:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ABI
+        : BINANCE_PRESALE_CONTRACT_ABI,
+    address:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ADDRESS
+        : BINANCE_PRESALE_CONTRACT_ADDRESS,
+    functionName: "calculateRemainingTime",
+    chainId: chainId === undefined ? 56 : chainId,
+  });
+
+  const { data: totalCap } = useReadContract({
+    abi:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ABI
+        : BINANCE_PRESALE_CONTRACT_ABI,
+    address:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ADDRESS
+        : BINANCE_PRESALE_CONTRACT_ADDRESS,
+    functionName: "totalCap",
+    chainId: chainId === undefined ? 56 : chainId,
+  });
+  console.log("contract totalcap value", totalCap);
+
+  const { data: presaleStarted } = useReadContract({
+    abi:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ABI
+        : BINANCE_PRESALE_CONTRACT_ABI,
+    address:
+      chainId === 1
+        ? ETHEREUM_PRESALE_CONTRACT_ADDRESS
+        : BINANCE_PRESALE_CONTRACT_ADDRESS,
+    functionName: "presaleStarted",
+    chainId: chainId === undefined ? 56 : chainId,
+  });
+  console.log("contract presale value", presaleStarted);
+
+  ///////////////   helper functions      ////////////////////////////
+  const myRound = (valueToBeRounded: any): any => {
+    let tmpVal = Math.round(parseFloat(valueToBeRounded) * 10 ** 4);
+    return tmpVal / 10 ** 4;
   };
 
+  const getETHPrice = async () => {
+    try {
+      const uniswapPairAddress = "0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852";
+      // Connect to Ethereum
+      const provider = new ethers.WebSocketProvider(
+        "wss://ethereum-rpc.publicnode.com"
+      );
+
+      // Load Uniswap's ETH/USDT pair contract
+      const uniswapPairContract = new ethers.Contract(
+        uniswapPairAddress,
+        [
+          "function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+        ],
+        provider
+      );
+
+      // Get reserves (in this case, ETH and USDT reserves)
+      const reserves = await uniswapPairContract.getReserves();
+      const reserveETH = reserves.reserve0;
+      const reserveUSDT = reserves.reserve1;
+
+      // Calculate ETH price in terms of USDT
+      const ethPriceInUSDT = (reserveUSDT * ethers.WeiPerEther) / reserveETH;
+      console.log("ethereum price", Number(ethPriceInUSDT) / 10 ** 6);
+      setEthPrice(Number(ethPriceInUSDT) / 10 ** 6);
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  const getBNBPrice = async () => {
+    try {
+      const pancakeswapv2routeraddress =
+        "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+      const provider = new ethers.WebSocketProvider(
+        "wss://bsc-rpc.publicnode.com"
+      );
+      const uniswapPairContract = new ethers.Contract(
+        pancakeswapv2routeraddress,
+        [
+          "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)",
+        ],
+        provider
+      );
+
+      const amounts = await uniswapPairContract.getAmountsOut(
+        BigInt(10 ** 18),
+        [
+          "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+          "0x55d398326f99059fF775485246999027B3197955",
+        ]
+      );
+      const _bnbprice = Number(amounts[1]) / Number(10 ** 18);
+      console.log("BNB price", Math.floor(_bnbprice * 10 ** 4) / 10 ** 4);
+      setBnbPrice(Math.floor(_bnbprice * 10 ** 4) / 10 ** 4);
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  ////////////// Core functions      //////////////////////////////
   const calcReceiveAmount = async () => {
-    if (parseFloat(buyAmount) < 0) return;
-    try {
-      if (!web3) return;
+    if (!shibaPrice) return;
+    let tmpBuyAmount = parseFloat(buyAmount);
+    if (isNaN(tmpBuyAmount) || tmpBuyAmount <= 0) {
+      setReceiveAmount(0.0);
+      return;
+    }
+    let price;
+    switch (selectedBuyMethod) {
+      case "BSC":
+        price = Number(shibaPrice) / 10 ** 4;
+        let tmpBnbReceiveAmount = (Number(bnbPrice) * tmpBuyAmount) / price;
+        setReceiveAmount(myRound(tmpBnbReceiveAmount));
+        break;
+      case "ETH":
+        price = Number(shibaPrice) / 10 ** 4;
+        let tmpEthReceiveAmount = (Number(ethPrice) * tmpBuyAmount) / price;
 
-      const contract = new web3.eth.Contract(abi, contractAddress);
-      const tokenPrice = await contract.methods
-        .calcPrice(web3.utils.toWei(buyAmount.toString(), "ether"))
-        .call();
-      setTokenReceived(parseFloat(web3.utils.fromWei(tokenPrice, "ether")));
-    } catch (error) {}
+        setReceiveAmount(myRound(tmpEthReceiveAmount));
+        break;
+      case "USDT":
+        price = Number(shibaPrice) / 10 ** 4;
+        let tmpUsdtReceiveAmount = tmpBuyAmount / price;
+        setReceiveAmount(myRound(tmpUsdtReceiveAmount));
+        break;
+    }
   };
 
-  // const handleRebalance = async () => {
-  //   try {
-  //     if (!web3) return;
-
-  //     const contract = new web3.eth.Contract(abi, contractAddress);
-  //     await contract.methods.buyTokens().call();
-  //   } catch (error) {}
-  // };
-
-  const handleBuy = async () => {
-    const amount = parseFloat(buyAmount);
-    const fee = parseFloat(gasFee);
-    try {
-      if (!web3 || isNaN(amount) || amount <= 0 || isNaN(fee) || fee <= 0) {
-        toast(
-          <Notification
-            type={"warn"}
-            msg={"Please enter exact amount and gas fee."}
-          />
-        );
-        return;
-      }
-
-      if (amount * 10 ** 18 + fee > balance) {
-        toast(
-          <Notification
-            type={"warn"}
-            msg={"Not enough balance to buy token."}
-          />
-        );
-        return;
-      }
-      const contract = new web3.eth.Contract(abi, contractAddress);
-      await contract.methods
-        .buyTokens()
-        .send({ from: account, gas: fee, value: amount * 10 ** 18 })
-        .then(() => {
+  const doBuyTokens = async () => {
+    if (!isConnected || (chainId !== 1 && chainId !== 56) || web3 === null)
+      return;
+    let tmpBuyAmount = parseFloat(buyAmount);
+    if (isNaN(tmpBuyAmount) || tmpBuyAmount <= 0) {
+      setReceiveAmount(0.0);
+      return;
+    }
+    console.log("//////////////////", tmpBuyAmount);
+    switch (selectedBuyMethod) {
+      case "BSC":
+        try {
+          let hash = await writeContractAsync({
+            abi: BINANCE_PRESALE_CONTRACT_ABI,
+            address: BINANCE_PRESALE_CONTRACT_ADDRESS,
+            functionName: "buyTokenWithBNB",
+            value: viemParseEther(tmpBuyAmount.toString()),
+          });
           toast(
-            <Notification type={"success"} msg={"You bought successfully."} />
+            <Notification
+              type={"success"}
+              msg={`Successfully Purchased.\n ${hash}`}
+            />
           );
-        })
-        .catch(() => {
-          toast(<Notification type={"fail"} msg={"Errors occured."} />);
-        });
-    } catch (error) {}
+        } catch (error: any) {
+          toast(
+            <Notification type={"fails"} msg={`${error.message || error}`} />
+          );
+        }
+        break;
+      case "ETH":
+        try {
+          let hash = await writeContractAsync({
+            abi: ETHEREUM_PRESALE_CONTRACT_ABI,
+            address: ETHEREUM_PRESALE_CONTRACT_ADDRESS,
+            functionName: "buyTokenWithETH",
+            value: viemParseEther(tmpBuyAmount.toString()),
+          });
+          toast(
+            <Notification
+              type={"success"}
+              msg={`Successfully Purchased.\n ${hash}`}
+            />
+          );
+        } catch (error: any) {
+          toast(
+            <Notification type={"fails"} msg={`${error.message || error}`} />
+          );
+        }
+        break;
+      case "USDT":
+        if (chainId === 1) {
+          let approved: any = false;
+          // Approve
+          try {
+            await writeContractAsync({
+              abi: ETHEREUM_USDT_CONTRACT_ABI,
+              address: USDT_ADDRESS_ON_ETHEREUM,
+              functionName: "approve",
+              args: [ETHEREUM_PRESALE_CONTRACT_ADDRESS, tmpBuyAmount * 10 ** 6],
+            });
+            approved = true;
+            // toast(
+            //   <Notification
+            //     type={"success"}
+            //     msg={`Successfully Purchased.\n ${hash}`}
+            //   />
+            // );
+          } catch (error: any) {
+            toast(
+              <Notification type={"fails"} msg={`${error.message || error}`} />
+            );
+          }
+          if (!approved) break;
+          try {
+            let hash = await writeContractAsync({
+              abi: ETHEREUM_PRESALE_CONTRACT_ABI,
+              address: ETHEREUM_PRESALE_CONTRACT_ADDRESS,
+              functionName: "buyTokenWithUSDT",
+              args: [tmpBuyAmount * 10 ** 6],
+            });
+            toast(
+              <Notification
+                type={"success"}
+                msg={`Successfully Purchased.\n ${hash}`}
+              />
+            );
+          } catch (error: any) {
+            toast(
+              <Notification type={"fails"} msg={`${error.message || error}`} />
+            );
+          }
+        }
+
+        if (chainId === 56) {
+          let approved: any = false;
+          // Approve
+          try {
+            await writeContractAsync({
+              abi: BINANCE_USDT_CONTRACT_ABI,
+              address: USDT_ADDRESS_ON_BINANCE,
+              functionName: "approve",
+              args: [BINANCE_PRESALE_CONTRACT_ADDRESS, tmpBuyAmount * 10 ** 18],
+            });
+            approved = true;
+            // toast(
+            //   <Notification
+            //     type={"success"}
+            //     msg={`Successfully Purchased.\n ${hash}`}
+            //   />
+            // );
+          } catch (error: any) {
+            toast(
+              <Notification type={"fails"} msg={`${error.message || error}`} />
+            );
+          }
+          if (!approved) break;
+
+          try {
+            let hash = await writeContractAsync({
+              abi: BINANCE_PRESALE_CONTRACT_ABI,
+              address: BINANCE_PRESALE_CONTRACT_ADDRESS,
+              functionName: "buyTokenWithUSDT",
+              args: [tmpBuyAmount * 10 ** 18],
+            });
+            toast(
+              <Notification
+                type={"success"}
+                msg={`Successfully Purchased.\n ${hash}`}
+              />
+            );
+          } catch (error: any) {
+            toast(
+              <Notification type={"fails"} msg={`${error.message || error}`} />
+            );
+          }
+        }
+        // contract?.methods
+        //   .buyTokenWithUSDT({
+        //     _usdtAmount: parseFloat(buyAmount),
+        //   })
+        //   .send({ from: address })
+        //   .on("transactionHash", function (hash: any) {
+        //     toast(
+        //       <Notification
+        //         type={"success"}
+        //         msg={`Successfully Purchased.\n ${hash}`}
+        //       />
+        //     );
+        //   })
+        //   .on("error", function (error: any) {
+        //     toast(<Notification type={"fails"} msg={`${error}`} />);
+        //   });
+        break;
+    }
   };
 
-  const handleSendChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  /////////////// UI EVENT HANDLE SECTION /////////////////////////////
+  const handleBuyWithSelected = (chainName: string) => {
+    setSelectedBuyMethod(chainName);
+    setBuyAmount("0");
+    setReceiveAmount(0);
+    switch (chainName) {
+      case "BSC":
+        break;
+      case "ETH":
+        break;
+      case "USDT":
+        break;
+    }
+    setIsBuyWithOpened(false);
+  };
+
+  const getBuyWithMethodImageUrl = () => {
+    return "images/" + selectedBuyMethod + ".png";
+  };
+
+  const handleBuyWithButtonClicked = () => {
+    setIsBuyWithOpened(!isBuyWithOpened);
+  };
+
+  //input amount change
+  const handleBuyAmountChanged = (e: any) => {
     setBuyAmount(e.target.value);
   };
 
-  const connectWallet = async () => {
-    try {
-      // Check if MetaMask is installed
-      if (!(window as any).ethereum) {
-        toast(
-          <Notification
-            type={""}
-            msg={`Please install metamask or other ethereum wallet.`}
-          />
-        );
-        return;
-      }
+  const handleBuyTokens = () => {
+    doBuyTokens();
+  };
 
-      // Create Web3 instance
-      const web3Instance = new Web3((window as any).ethereum);
-      const netId = await web3Instance.eth.net.getId();
-      if (Number(netId) !== 1) {
-        toast(
-          <Notification
-            type={""}
-            msg={`Switch your network to Ethereum Mainnet.`}
-          />
-        );
+  /////////// UI helper function ////////////
+  const TimeAtomicBlockSepeateComp = () => {
+    return (
+      <div className="m-auto w-[5.42px] h-[18.97px] flex justify-between flex-col">
+        <div className="bg-white w-[5.42px] h-[5.42px] rounded-full"></div>
+        <div className="bg-white w-[5.42px] h-[5.42px] rounded-full"></div>
+      </div>
+    );
+  };
 
-        await (window as any).ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x1" }],
-        });
-      }
-
-      // Request account access
-      await (window as any).ethereum.request({ method: "eth_requestAccounts" });
-
-      // Get Ethereum selected account
-      const accounts = await web3Instance.eth.getAccounts();
-      setAccount(accounts[0]);
-
-      toast(
-        <Notification
-          type={"success"}
-          msg={`Connected successfully. \n ${accounts[0]}`}
-        />
+  const dispCoreButton = () => {
+    if (isConnected) {
+      return (selectedBuyMethod === "USDT" &&
+        Number(buyAmount) * 10 ** 6 < Number(usdtBalance.data?.value)) ||
+        (selectedBuyMethod !== "USDT" &&
+          Number(buyAmount) * 10 ** 18 < Number(balance.data?.value)) ? (
+        <button
+          onClick={() => handleBuyTokens()}
+          className=" bg-[#0D0B33] h-[53px] tracking-wider font-shareTech mx-auto sm:mx-0 text-[20px] w-[90%] sm:w-full rounded-lg font-normal text-white"
+        >
+          Buy Now
+        </button>
+      ) : (
+        <button
+          disabled
+          className="bg-gray-900 h-[53px] tracking-wider font-shareTech mx-auto sm:mx-0 text-[20px] w-[90%] sm:w-full rounded-lg font-normal text-white"
+        >
+          Insufficient Amount
+        </button>
       );
-
-      setIsConnected(true);
-      setWeb3(web3Instance);
-    } catch (error) {}
+    } else {
+      return (
+        <button
+          onClick={() => open()}
+          className="bg-[#0D0B33] h-[53px] tracking-wider font-shareTech mx-auto sm:mx-0 text-[20px] w-[90%] sm:w-full rounded-lg font-normal text-white"
+        >
+          Connect Wallet
+        </button>
+      );
+    }
   };
 
   useEffect(() => {
-    const web3Instance = new Web3((window as any).ethereum);
-    setWeb3(web3Instance);
-    web3Instance.eth.net.getId().then((netId) => {
-      if (Number(netId) !== 1) {
-        toast(
-          <Notification
-            type={""}
-            msg={`Switch your network to Ethereum Mainnet.`}
-          />
-        );
-      }
-      (window as any).ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x1" }],
-      });
-    });
+    if (!timeRemained) return;
+    setDaysRemained(Math.floor(Number(timeRemained) / (60 * 60 * 24)));
+    setHoursRemained(Math.floor((Number(timeRemained) / 60 / 60) % 24));
+    setMinutesRemained(Math.floor((Number(timeRemained) / 60) % 60));
+    setSecondRemained(Math.floor(Number(timeRemained) % 60));
+    console.log(
+      Number(timeRemained) / (60 * 60 * 24),
+      (Number(timeRemained) / 60 / 60) % 24,
+      (Number(timeRemained) / 60) % 60,
+      Number(timeRemained) % 60
+    );
+  }, [timeRemained]);
 
-    calcBalance(), calcReceiveAmount();
-  }, [isConnected, buyAmount]);
+  useEffect(() => {
+    console.log("get eth & bnb price");
+    if (ethPrice === undefined) getETHPrice();
+    if (bnbPrice === undefined) getBNBPrice();
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    console.log("connected", chainId);
+    if (chainId === 1) {
+      setConnectedNetworkName("ETHEREUM");
+      setWeb3(new Web3(ETHEREUM_RPC_URL));
+      setSelectedBuyMethod("ETH");
+    } else if (chainId === 56) {
+      setConnectedNetworkName("BINANCE");
+      setWeb3(new Web3(BINANCE_RPC_URL));
+      setSelectedBuyMethod("BSC");
+    }
+    setBuyAmount("0.0");
+    setReceiveAmount(0.0);
+  }, [isConnected, chainId]);
+
+  useEffect(() => {
+    calcReceiveAmount();
+  }, [buyAmount, shibaPrice, selectedBuyMethod]);
+
+  useEffect(() => {
+    if (!_timeRemained) return;
+
+    const timerHanlde = setInterval(() => {
+      if (timeRemained === 0) clearInterval(timerHanlde);
+      else {
+        setTimeRemained((x: Number | undefined) => {
+          if (x === undefined) return Number(_timeRemained);
+          else return Number(x.valueOf() - 1);
+        });
+        console.log("Timer : ", timeRemained);
+      }
+    }, 1000);
+
+    return () => clearInterval(timerHanlde);
+  }, [_timeRemained]);
 
   return (
-    <section className="overflow-hidden mt-[8%] md:mt-0">
-      <div className="grid grid-cols-1 md:grid-cols-2 justify-between lg:px-20 bg-hero lg:py-[10%] p-4 gap-20 md:gap-0 overflow-hidden max-w-full relative">
-        <div className="absolute flex-col grow items-center max-h-[500px] overflow-hidden max-w-[50%] top-[60%] -left-[8%] -z-1">
-          <Image src={Chart} alt="bg-image" className="w-full h-[500px]" />
-        </div>
-        <div className="absolute flex-col grow items-center max-h-[500px] overflow-hidden max-w-[50%] top-[60%] -right-[8%] -z-1">
-          <Image src={Chart} alt="bg-image" className="w-full h-[500px]" />
-        </div>
-        <div className="-z-20 absolute flex-col grow items-center h-[80%] overflow-hidden w-[50%] -top-[8%] -right-[1%] mix-blend-color-burn">
-          <Image src={BgWeb} alt="bg-image" className="w-full h-full" />
-        </div>
+    <section className="mt-[150px] lg:mt-[50px] relative">
+      <div className="flex lg:mt-0 mt-[300px] justify-between px-4 sm:px-15 md:px-20 lg:pt-[10%]">
+        <ShibaBlock_top />
         <Grid
-          className="w-full h-full justify-center gap-4 mt-[10%] md:mt-0"
-          data-aos="fade-up"
-          data-aos-anchor-placement="center-bottom"
+          className="z-1 bg-[#141746] sm:w-full  lg:w-[600px] w-full md:m-auto lg:m-0 rounded-[45px] border-[9px] border-[#1B0C3D] justify-center items-center"
+          // data-aos-easing="ease-in"
+          // data-aos="flip-up"
         >
-          <h2 className="bg-clip-text text-transparent bg-gradient-to-r from-[#00C2B6] to-[#5865F2] lg:text-[48px] lg:leading-[60px] font-extrabold font-inter text-xl">
-            LIVE STREAMING POWER
-          </h2>
-          <h3 className="font-bold text-white lg:text-[48px] lg:leading-[60px] font-inter text-lg">
-            Power your Stream
-          </h3>
-          <Grid className="mt-2 md:mt-10 gap-4 md:gap-8">
-            <h1 className="lg:text-[40px] lg:leading-[47px] font-semibold text-white font-roboto">
-              Tired of in-app purchases & limited tipping? unleash the{" "}
-              <span className="font-inter">LSW</span> revolution
-            </h1>
-            <h2 className="lg:text-[32px] lg:leading-[38px] font-roboto text-gray-400">
-              LSW aims to disrupt the traditional live streaming tipping model,
-              empowering creators, and fostering a more vibrant community within
-              the live streaming landscape.
-            </h2>
-          </Grid>
-
-          <Block className="gap-8 mt-[2%]">
-            <button className="bg-[#001C29] px-10 py-2 rounded-md shadow-md font-bold text-white">
-              BUY LSW
-            </button>
-            <a
-              href="https://www.google.com"
-              className="bg-[#5865F2] px-8 py-2 rounded-md shadow-md text-white font-bold"
-            >
-              WHITE PAPER
-            </a>
-          </Block>
-        </Grid>
-        <Grid
-          className="w-full h-full justify-center items-center"
-          data-aos="fade-down"
-          data-aos-easing="ease-in"
-        >
-          <Grid className="bg-primary shadow-md rounded-md gap-6 w-full md:w-[75%] py-8">
+          <Grid className=" shadow-md gap-6 py-8">
             <Grid className="items-center gap-4 px-4">
-              <h2 className="lg:text-[48px] font-roboto font-bold text-white lg:leading-[60px]">
-                BUY <span className="font-inter">LSW</span> TOKEN
+              <h2 className="text-[35px] sm:text-[40px] text-center text-pretty font-holtwood font-bold text-white">
+                BUY{" "}
+                <span className="text-[#F7A039] block sm:inline">PALSHIBA</span>
               </h2>
-              <h2 className="lg:text-[15px] text-white font-bold uppercase text-center md:text-start">
-                Presale <span className="text-[#00C2B6]">live</span> {"\u2022"}{" "}
-                ends by{" "}
-                <span className="text-[#00C2B6]">1st jun 25 or hardcap </span>
-              </h2>
-            </Grid>
-            <Block className="justify-between">
-              <div className="w-[35%] bg-gradient-to-r to-[#00C2B6] from-[#5865F2] h-[0.15rem]" />
-              <h2 className="lg:text-[24px] text-white font-bold">BUY WITH</h2>
-              <div className="w-[35%] bg-gradient-to-r to-[#00C2B6] from-[#5865F2] h-[0.15rem]" />
-            </Block>
-
-            <Grid className="items-center gap-4">
-              <Block className="bg-[#001C29] w-[80%] md:w-[60%] justify-center px-[8%] p-2 rounded-md">
-                <Block className="items-center">
-                  <Image
-                    src={Eth}
-                    alt="bg-image"
-                    className="w-[45px] h-[45px]"
-                  />
-                  <h2 className="font-semibold lg:text-[20px]">ETH</h2>
-                </Block>
-              </Block>
-              <h2 className="lg:text-[15px] text-gray-400 font-bold">
-                BALANCE : <span className="text-white">{balance}</span>{" "}
-                <span className="mr-2 ml-2">{"\u2022"}</span> GASFEE{" "}
-                <input
-                  type="text"
-                  placeholder=""
-                  value={gasFee}
-                  onChange={(e) => setGasFee(e.target.value)}
-                  className="w-[50px] rounded-md bg-transparent outline-none text-right text-white"
-                />
-              </h2>
+              <p className="text-white font-shareTech text-[25.24px]">
+                {presaleStarted === true
+                  ? "Time Remain"
+                  : "Presale not started"}
+              </p>
             </Grid>
 
-            <Block className="items-center px-[10%] gap-6">
-              <Grid className="bg-[#001C29] relative w-full rounded-md gap-4 p-4">
-                <input
-                  type="text"
-                  placeholder="Amount"
-                  value={buyAmount}
-                  onChange={(e) => handleSendChange(e)}
-                  className="text-white w-[100%] rounded bg-transparent outline-none"
-                />
-                <h2 className="lg:text-[16px] font-semibold">
-                  YOU SEND{" "}
-                  <button
-                    className="ml-2 pl-1 pr-1 text-white bg-[#498aa0] rounded-md absolute right-3"
-                    onClick={() =>
-                      setBuyAmount(
-                        Math.max(balance - parseFloat(gasFee), 0).toString()
-                      )
-                    }
-                  >
-                    max
-                  </button>
-                </h2>
-              </Grid>
+            <div>
+              <div className="flex justify-center">
+                <TimeAtomicBlock title="days" value={daysRemained} />
+                <TimeAtomicBlockSepeateComp />
+                <TimeAtomicBlock title="hours" value={hoursRemained} />
+                <TimeAtomicBlockSepeateComp />
+                <TimeAtomicBlock title="minutes" value={minutesRemained} />
+                <TimeAtomicBlockSepeateComp />
+                <TimeAtomicBlock title="seconds" value={secondsRemained} />
+              </div>
+              <div className="pt-7 mt-5 sm:mt-0">
+                <div className="sm:flex sm:justify-between grid justify-center">
+                  <p className="font-shareTech sm:mx-0 mx-auto my-auto text-white text-[32px]">
+                    RAISED:
+                  </p>
+                  <p className="font-shareTech my-auto text-[#F7A039] text-[24px]">
+                    ${" "}
+                    {!totalCap
+                      ? "0"
+                      : Math.floor(
+                          Number(totalCap) /
+                            (chainId === 1 ? 10 ** 2 : 10 ** 14)
+                        ) /
+                        10 ** 4}
+                    /$2,000,000
+                  </p>
+                </div>
 
-              <Grid className="bg-[#001C29] w-full rounded-md gap-4 p-4">
-                <h2 className="lg:text-[16px] font-semibold text-white">
-                  {tokensReceived}
-                </h2>
-                <h2 className="lg:text-[16px] font-semibold">YOU RECEIVE</h2>
-              </Grid>
-            </Block>
+                <div className="sm:flex sm:justify-between grid justify-center">
+                  <p className="font-shareTech sm:mx-0 mx-auto my-auto text-white text-[32px]">
+                    Claimed:
+                  </p>
+                  <p className="font-shareTech my-auto text-[#F7A039] text-[24px]">
+                    {!claimAmount
+                      ? "0"
+                      : Math.floor(Number(claimAmount) / 10 ** 14) /
+                        10 ** 4}{" "}
+                    $PSHIBA
+                  </p>
+                </div>
 
-            <Grid className="px-[10%] pb-[4%]">
-              {!isConnected ? (
-                <button
-                  onClick={connectWallet}
-                  className="bg-gradient-to-r via-[#00C2B6] from-[#5865F2] to-[#5865F2] rounded-md p-1 lg:text-[24px] text-white font-bold"
-                >
-                  CONNECT WALLET
-                </button>
-              ) : parseFloat(buyAmount) * 10 ** 18 + parseFloat(gasFee) <=
-                balance ? (
-                <button
-                  onClick={handleBuy}
-                  className="bg-gradient-to-r via-[#00C2B6] from-[#5865F2] to-[#5865F2] rounded-md p-1 lg:text-[24px] text-white font-bold"
-                >
-                  Buy Now
-                </button>
-              ) : (
-                <button
-                  disabled
-                  className="bg-gray-700 rounded-md p-1 lg:text-[24px] text-white font-bold"
-                >
-                  Insufficient amount
-                </button>
-              )}
-            </Grid>
+                <div className="flex justify-between">
+                  <div className="sm:block hidden w-[125px] border my-auto border-white"></div>
+                  <p className="h-[23px] mx-auto sm:mx-0 text-[#F7A039] font-shareTech text-[20px] text-center">
+                    1 PSHIBA = $
+                    {!shibaPrice ? "0" : Number(shibaPrice) / 10 ** 4}
+                  </p>
+                  <div className="sm:block hidden w-[125px] border my-auto border-white"></div>
+                </div>
+                <div className="mt-7 sm:mt-0 grid sm:flex sm:justify-between">
+                  <div className="text-center sm:text-left">
+                    <p className="font-shareTech  text-white text-[20px]">
+                      Amount you pay
+                    </p>
+                    <div className="relative flex justify-between mx-auto sm:mx-0 w-[90%] sm:w-[182px] h-[53px] rounded-[8px] bg-[#0D0B33]">
+                      <div className="m-auto">
+                        <input
+                          type="text"
+                          value={buyAmount}
+                          onChange={(e) => handleBuyAmountChanged(e)}
+                          className="text-[#F7A039] pl-3 font-poppins outline-none w-[115px] bg-transparent text-[20px]"
+                        />
+                      </div>
+                      <div className="flex justify-between m-auto">
+                        <div className="m-auto h-[34px] w-0 border border-gray-700"></div>
+                        <div
+                          className="m-auto"
+                          onClick={() => handleBuyWithButtonClicked()}
+                        >
+                          <img
+                            src={getBuyWithMethodImageUrl()}
+                            className="w-[50px]"
+                          />
+                        </div>
+                      </div>
+                      <div
+                        className={`${
+                          isBuyWithOpened ? "block" : "hidden"
+                        } absolute z-20 rounded-md top-[53px] left-0 w-[100%] sm:w-[182px] bg-[#0D0B33] drop-shadow-[2px_3px_3px_rgba(255,255,255,0.55)]`}
+                      >
+                        <p className="text-white ml-[20px] font-poppins text-[20px]">
+                          Buy with
+                        </p>
+                        <div
+                          onClick={() => handleBuyWithSelected("BSC")}
+                          className={`${
+                            connectedNetworkName === "ETHEREUM"
+                              ? "hidden"
+                              : "block"
+                          } cursor-pointer flex text-left`}
+                        >
+                          <div className="m-auto w-[38px] h-[38px]">
+                            <img
+                              src="images/BSC.png"
+                              className="w-[38px] h-[38px]"
+                            />
+                          </div>
+                          <p className="pl-[10px] my-auto w-[144px] font-poppins text-white text-[16px]">
+                            Binance Token
+                          </p>
+                        </div>
+                        <div
+                          onClick={() => handleBuyWithSelected("ETH")}
+                          className={`${
+                            connectedNetworkName === "BINANCE"
+                              ? "hidden"
+                              : "block"
+                          } cursor-pointer flex text-left`}
+                        >
+                          <div className="m-auto w-[38px] h-[38px]">
+                            <img
+                              src="images/ETH.png"
+                              className="w-[38px] h-[38px]"
+                            />
+                          </div>
+                          <p className="pl-[10px] my-auto w-[144px] font-poppins text-white text-[16px]">
+                            Ethereum
+                          </p>
+                        </div>
+                        <div
+                          onClick={() => handleBuyWithSelected("USDT")}
+                          className="cursor-pointer flex text-left"
+                        >
+                          <div className="m-auto w-[38px] h-[38px]">
+                            <img
+                              src="images/USDT.png"
+                              className="w-[37px] h-[37px]"
+                            />
+                          </div>
+                          <p className="pl-[10px] my-auto w-[144px] font-poppins text-white text-[16px]">
+                            USDT
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 sm:mt-0 text-center sm:text-left">
+                    <p className="font-shareTech text-white text-[20px]">
+                      PALMSHIBA you receive
+                    </p>
+                    <div className="flex justify-between mx-auto sm:mx-0 w-[90%] sm:w-[182px] h-[53px] rounded-[8px] bg-[#0D0B33]">
+                      <div className="m-auto">
+                        <input
+                          type="text"
+                          value={receiveAmount.toString()}
+                          readOnly={true}
+                          className="text-[#F7A039] bg-transparent outline-none w-[115px]  pl-3 font-poppins text-[20px]"
+                        />
+                      </div>
+
+                      <div className="m-auto">
+                        <img
+                          src="images/palmshiba_icon.png"
+                          className="w-[50px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {dispCoreButton()}
+
+            <button
+              onClick={handleBuyTokens}
+              className="bg-[#0D0B33] h-[53px] tracking-wider mx-auto sm:mx-0 font-shareTech text-[20px] w-[90%] sm:w-full rounded-lg font-normal text-white"
+            >
+              How to buy
+            </button>
           </Grid>
         </Grid>
+        <ShibaBlock />
       </div>
 
       <ToastContainer autoClose={3000} style={{ paddingTop: "90px" }} />

@@ -1,35 +1,29 @@
 import Grid from "../components/Grid";
-import Header from "../components/Header";
-import Buy from "./Buy";
-import Creators from "./Creators";
-import Footer from "./Footer";
 import Hero from "./Hero";
-import Live from "./Live";
-import Lsw from "./Lsw";
-import Page from "./Page";
-import Payment from "./Payment";
-import RoadMap from "./RoadMap";
-import Testimonial from "./Testimonial";
+import AboutUs from "./AboutUs";
+import HowToBuy from "./HowToBuy";
+import Roadmap from "./Roadmap";
+import Gallery from "./Gallery";
+import Claim from "./Claim";
+import Staking from "./Staking";
+import FAQ from "./FAQ";
+import Footer from "./Footer";
 import Tokenomics from "./Tokenomics";
-import Wire from "./Wire";
-import Works from "./Works";
+import Header from "../components/Header";
 
 const Home = () => {
   return (
-    <Grid className="w-full h-full">
+    <Grid className="w-full h-full bg-[#04011C] overflow-hidden">
       <Header />
       <Hero />
-      <Testimonial />
-      <Wire />
-      <Page />
-      <Payment />
-      <Live />
-      <Creators />
-      <Works />
-      <Buy />
-      <RoadMap />
+      <AboutUs />
+      <HowToBuy />
+      <Roadmap />
       <Tokenomics />
-      <Lsw />
+      <Gallery />
+      <Claim />
+      <Staking />
+      <FAQ />
       <Footer />
     </Grid>
   );
